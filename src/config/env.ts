@@ -7,6 +7,9 @@ dotenv.config({
 });
 
 export const env = {
+  //Frontend
+  FRONTEND_URL: process.env.FRONTEND_URL || '',
+
   // General
   PORT: Number(process.env.PORT || 3000),
   JWT_SECRET: process.env.JWT_SECRET || '',

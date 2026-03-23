@@ -12,7 +12,9 @@ import { wsProxy } from "@services/wsProxy";
 const app = express();
 
 //Global middlewares
-app.use(cors());
+app.use(cors({
+  origin: [env.FRONTEND_URL]
+}));
 app.use(helmet());
 app.use(rateLimiter);
 
