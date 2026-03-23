@@ -7,13 +7,8 @@ export type Service = {
 
 export const services: Service[] = [
   { prefix: "/api/v1", target: env.CHATFUSIONX_SERVICE},
-  // { prefix: "/v1/group", target: env.USER_SERVICE},
-  // { prefix: "/v1/private", target: env.USER_SERVICE},
-
-  // { prefix: "/v1/chatfusionx-ai", target: env.AI_SERVICE},
-
-  // { prefix: "/v1/text-extraction", target: env.FILE_SERVICE},
-  // { prefix: "/v1/pdf-to-png", target: env.FILE_SERVICE}
+  { prefix: "/api/pdf-to-png", target: env.PDF_TO_PNG_SERVICE},
+  { prefix: "/api/text-extraction", target: env.TEXT_EXTRACTION_SERVICE}
 ];
 
 export const authorizeUrls: string[] = [

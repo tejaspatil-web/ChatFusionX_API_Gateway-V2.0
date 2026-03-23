@@ -4,15 +4,15 @@ import { env } from "@config/env";
 
 export async function checkHealth(req: any, res: Response) {
 const services = [
-    { name: "user-service", url: `${env.USER_SERVICE}/health` },
-    { name: "ai-service", url: `${env.AI_SERVICE}/health` },
-    { name: "file-service", url: `${env.FILE_SERVICE}/health` }
+    { name: "chatfusionx-service", url: `${env.CHATFUSIONX_SERVICE}/api/v1/health` },
+    { name: "pdf-to-png-service", url: `${env.PDF_TO_PNG_SERVICE}/health` },
+    { name: "text-extraction-service", url: `${env.TEXT_EXTRACTION_SERVICE}/health` }
   ];
 
   const results = await Promise.all(
     services.map(async (service) => {
       try {
-        const response = await axios.get(service.url, { timeout: 3000 });
+        const response = await axios.get(service.url);
         return {
           service: service.name,
           status: "UP",

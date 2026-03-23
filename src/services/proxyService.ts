@@ -6,6 +6,7 @@ import { logger } from "@utils/logger";
 
 export async function proxyRequest(req: any, res: Response) {
   const path = req.originalUrl.split("?")[0];
+  const maxContentLength = 50 * 1024 * 1024; // 50MB
 
   const service = services.find(
     s => path === s.prefix || path.startsWith(s.prefix + "/")
@@ -19,16 +20,27 @@ export async function proxyRequest(req: any, res: Response) {
   try {
     logger.info(`${req.method} ${req.originalUrl} -> ${target}`);
 
+    const contentLength = Number(req.headers["content-length"] || 0);
+
+    if (contentLength > maxContentLength) {
+      return res.status(413).json({ error: "Payload too large" });
+    }
+
+    const headers: any = {
+      ...req.headers,
+      "X-SERVICE-KEY": env.SERVICE_KEY
+    };
+
+    delete headers["host"];
+    delete headers["content-length"];
+
     const response = await axios({
       method: req.method,
       url: target,
-      headers: {
-        Authorization: req.headers.authorization,
-        "X-SERVICE-KEY": env.SERVICE_KEY,
-        "X-GATEWAY": "gateway",
-        "Content-Type": req.headers["content-type"]
-      },
-      data: req.method !== "GET" ? req.body : undefined,
+      headers,
+      data: ["GET", "HEAD"].includes(req.method) ? undefined : req,
+      maxContentLength: maxContentLength,
+      maxBodyLength: maxContentLength,
       timeout: 15000
     });
 

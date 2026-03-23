@@ -15,6 +15,8 @@ export const env = {
   // Services
   CHATFUSIONX_SERVICE: process.env.CHATFUSIONX_SERVICE || '',
   WS_SERVICE: process.env.WS_SERVICE || '',
+  PDF_TO_PNG_SERVICE: process.env.PDF_TO_PNG_SERVICE || '',
+  TEXT_EXTRACTION_SERVICE: process.env.TEXT_EXTRACTION_SERVICE || '',
 
   // Auth-related URLs
   SERVER_STATUS_URL: process.env.SERVER_STATUS_URL || '',

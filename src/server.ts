@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import http from 'http'
+import http from "http";
 
 import { env } from "@config/env";
 import { rateLimiter } from "@middleware/rateLimiter";
@@ -11,21 +11,19 @@ import { wsProxy } from "@services/wsProxy";
 
 const app = express();
 
-// Middleware
-app.use(express.json());
+//Global middlewares
 app.use(cors());
 app.use(helmet());
 app.use(rateLimiter);
 
-// Routes
+//WebSocket proxy
+app.use("/gateway", wsProxy);
+
+//Gateway routes
 app.use(gatewayRouter);
 
 const server = http.createServer(app);
 
-// websocket proxy route
-app.use("/gateway", wsProxy);
-
-// upgrade handler for websocket
 server.on("upgrade", wsProxy.upgrade);
 
 server.listen(env.PORT, () => {
