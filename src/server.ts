@@ -13,7 +13,7 @@ const app = express();
 
 //Global middlewares
 app.use(cors({
-  origin: [env.FRONTEND_URL]
+  origin: [env.FRONTEND_URL,"http://localhost:4200"],
 }));
 app.use(helmet());
 app.use(rateLimiter);
