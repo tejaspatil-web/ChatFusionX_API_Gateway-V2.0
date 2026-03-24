@@ -38,7 +38,7 @@ export async function proxyRequest(req: any, res: Response) {
       method: req.method,
       url: target,
       headers,
-      data: ["GET", "HEAD"].includes(req.method) ? undefined : req,
+      data: ["GET", "HEAD"].includes(req.method) ? undefined : req.body,
       maxContentLength: maxContentLength,
       maxBodyLength: maxContentLength,
       timeout: 300000
