@@ -41,7 +41,7 @@ export async function proxyRequest(req: any, res: Response) {
       data: ["GET", "HEAD"].includes(req.method) ? undefined : req,
       maxContentLength: maxContentLength,
       maxBodyLength: maxContentLength,
-      timeout: 15000
+      timeout: 300000
     });
 
     return res.status(response.status).send(response.data);
