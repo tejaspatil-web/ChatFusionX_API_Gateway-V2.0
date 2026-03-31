@@ -34,17 +34,35 @@ export async function proxyRequest(req: any, res: Response) {
     delete headers["host"];
     delete headers["content-length"];
 
+    const isBodyAllowed = !["GET", "HEAD"].includes(req.method);
+    const isMultipart = req.headers["content-type"]?.includes("multipart/form-data");
+
     const response = await axios({
       method: req.method,
       url: target,
       headers,
-      data: ["GET", "HEAD"].includes(req.method) ? undefined : req,
-      maxContentLength: maxContentLength,
-      maxBodyLength: maxContentLength,
+      data: isBodyAllowed ? req : undefined,
+      responseType: isMultipart ? "stream" : "arraybuffer",
+      maxContentLength:maxContentLength,
+      maxBodyLength:maxContentLength,
       timeout: 300000
     });
 
+    if (isMultipart) {
+      // stream response
+      res.status(response.status);
+
+      Object.entries(response.headers).forEach(([key, value]) => {
+        if (value) res.setHeader(key, value);
+      });
+
+      response.data.pipe(res);
+      return;
+    }
+
+    //JSON / normal response
     return res.status(response.status).send(response.data);
+
   } catch (err: any) {
     if (err.response)
       return res.status(err.response.status).json(err.response.data);
