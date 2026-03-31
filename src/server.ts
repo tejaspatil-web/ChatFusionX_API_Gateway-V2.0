@@ -16,10 +16,18 @@ app.use(cors({
   origin: [env.FRONTEND_URL,"http://localhost:4200"],
 }));
 app.use(helmet());
-app.use(rateLimiter);
 
 //WebSocket proxy
 app.use("/gateway", wsProxy);
+
+
+//Apply rate limiter ONLY to API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith("/gateway")) {
+    return next();
+  }
+  return rateLimiter(req, res, next);
+});
 
 //Gateway routes
 app.use(gatewayRouter);
