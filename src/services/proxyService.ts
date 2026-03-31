@@ -53,7 +53,9 @@ export async function proxyRequest(req: any, res: Response) {
       res.status(response.status);
 
       Object.entries(response.headers).forEach(([key, value]) => {
-        if (value) res.setHeader(key, value);
+        if (value && key.toLowerCase() !== "transfer-encoding") {
+          res.setHeader(key, value);
+        }
       });
 
       response.data.pipe(res);
@@ -63,9 +65,21 @@ export async function proxyRequest(req: any, res: Response) {
     //JSON / normal response
     return res.status(response.status).send(response.data);
 
-  } catch (err: any) {
-    if (err.response)
-      return res.status(err.response.status).json(err.response.data);
+} catch (err: any) {
+    if (err.response) {
+      let data = err.response.data;
+
+      if (Buffer.isBuffer(data)) {
+        data = data.toString("utf-8");
+      }
+
+      logger.error(`STATUS: ${err.response.status}`);
+      logger.error(`ERROR DATA:", ${data}`);
+
+      return res.status(err.response.status).json({
+        error: data
+      });
+    }
 
     if (err.request)
       return res.status(503).json({ error: "Service unavailable" });
