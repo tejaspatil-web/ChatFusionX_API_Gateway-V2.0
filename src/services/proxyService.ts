@@ -1,71 +1,92 @@
-import axios from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 import { Response } from "express";
 import { services } from "@config/serviceRegistry";
 import { env } from "@config/env";
 import { logger } from "@utils/logger";
 
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+
 export async function proxyRequest(req: any, res: Response) {
   const path = req.originalUrl.split("?")[0];
-  const maxContentLength = 50 * 1024 * 1024; // 50MB
 
   const service = services.find(
     s => path === s.prefix || path.startsWith(s.prefix + "/")
   );
 
-  if (!service)
+  if (!service) {
     return res.status(404).json({ error: "Service not found" });
+  }
 
-  const target = service.target + req.originalUrl;
+  const targetUrl = service.target + req.originalUrl;
 
   try {
-    logger.info(`${req.method} ${req.originalUrl} -> ${target}`);
+    logger.info(`${req.method} ${req.originalUrl} → ${targetUrl}`);
 
     const contentLength = Number(req.headers["content-length"] || 0);
-
-    if (contentLength > maxContentLength) {
+    if (contentLength > MAX_SIZE) {
       return res.status(413).json({ error: "Payload too large" });
     }
 
-    const headers: any = {
+    const headers: Record<string, any> = {
       ...req.headers,
       "X-SERVICE-KEY": env.SERVICE_KEY
     };
 
     delete headers["host"];
     delete headers["content-length"];
+    delete headers["connection"];
 
     const isBodyAllowed = !["GET", "HEAD"].includes(req.method);
     const isMultipart = req.headers["content-type"]?.includes("multipart/form-data");
 
-    const response = await axios({
-      method: req.method,
-      url: target,
+    const axiosConfig: AxiosRequestConfig = {
+      method: req.method as any,
+      url: targetUrl,
       headers,
-      data: isBodyAllowed ? req : undefined,
+      data: isBodyAllowed ? req.body : undefined,
       responseType: isMultipart ? "stream" : "arraybuffer",
-      maxContentLength:maxContentLength,
-      maxBodyLength:maxContentLength,
-      timeout: 300000
+      maxContentLength: MAX_SIZE,
+      maxBodyLength: MAX_SIZE,
+      timeout: 300000,
+      validateStatus: () => true
+    };
+
+    const response = await axios(axiosConfig);
+
+    Object.entries(response.headers).forEach(([key, value]) => {
+      if (value && key.toLowerCase() !== "transfer-encoding") {
+        res.setHeader(key, value as any);
+      }
     });
 
-    if (isMultipart) {
-      // stream response
+    if (isMultipart || response.request?.res?.responseUrl?.includes("download")) {
       res.status(response.status);
-
-      Object.entries(response.headers).forEach(([key, value]) => {
-        if (value && key.toLowerCase() !== "transfer-encoding") {
-          res.setHeader(key, value);
-        }
-      });
-
       response.data.pipe(res);
       return;
     }
 
-    //JSON / normal response
-    return res.status(response.status).send(response.data);
+    let responseData: any = response.data;
+    const contentType = response.headers["content-type"] || "";
 
-} catch (err: any) {
+    if (Buffer.isBuffer(response.data)) {
+      const text = response.data.toString("utf-8");
+
+      if (contentType.includes("application/json")) {
+        try {
+          responseData = JSON.parse(text);
+        } catch (err) {
+          logger.error("JSON parse failed from upstream");
+          logger.error(text);
+          responseData = text;
+        }
+      } else {
+        responseData = text;
+      }
+    }
+
+    return res.status(response.status).send(responseData);
+
+  } catch (err: any) {
     if (err.response) {
       let data = err.response.data;
 
@@ -73,19 +94,29 @@ export async function proxyRequest(req: any, res: Response) {
         data = data.toString("utf-8");
       }
 
-      logger.error(`STATUS: ${err.response.status}`);
-      logger.error(`ERROR DATA:", ${data}`);
+      logger.error(`Upstream Error: ${err.response.status}`);
+      logger.error(data);
 
-      return res.status(err.response.status).json({
-        error: data
+      return res.status(err.response.status).send({
+        error: "Upstream service error",
+        details: data
       });
     }
 
-    if (err.request)
+    if (err.code === "ECONNABORTED") {
+      logger.error("Timeout error");
+      return res.status(504).json({ error: "Gateway timeout" });
+    }
+
+    if (err.request) {
+      logger.error("Service unreachable");
       return res.status(503).json({ error: "Service unavailable" });
+    }
 
-    logger.error(`Gateway error: ${err.message}`);
+    logger.error(`Gateway error:", ${err.message}`);
 
-    return res.status(500).json({ error: "Gateway internal error" });
+    return res.status(500).json({
+      error: "Gateway internal error"
+    });
   }
 }
