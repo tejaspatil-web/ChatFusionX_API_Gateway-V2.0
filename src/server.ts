@@ -11,6 +11,10 @@ import { wsProxy } from "@services/wsProxy";
 
 const app = express();
 
+//Body parsers
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true }));
+
 //Global middlewares
 app.use(cors({
   origin: [env.FRONTEND_URL,"http://localhost:4200"],
