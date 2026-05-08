@@ -33,6 +33,8 @@ app.use((req, res, next) => {
   }
   //Apply rate limiter ONLY to API routes
   // return rateLimiter(req, res, next);
+
+  next();
 });
 
 //Gateway routes
