@@ -11,6 +11,8 @@ import { wsProxy } from "@services/wsProxy";
 
 const app = express();
 
+const PORT = process.env.PORT || env.PORT || 3000;
+
 //Body parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -40,6 +42,6 @@ const server = http.createServer(app);
 
 server.on("upgrade", wsProxy.upgrade);
 
-server.listen(env.PORT, "0.0.0.0", () => {
-  logger.info(`Gateway running on port ${env.PORT}`);
+server.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`Gateway running on port ${PORT}`);
 });
