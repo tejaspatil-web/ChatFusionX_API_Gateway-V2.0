@@ -5,7 +5,24 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function checkService(url: string, timeout: number, retries = 3) {
+async function wakeService(url: string) {
+  try {
+    await fetch(url, {
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+  } catch {
+    // Ignore wake-up errors
+  }
+}
+
+async function checkService(
+  url: string,
+  timeout: number,
+  retries = 3
+) {
   let lastError: any;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -22,6 +39,7 @@ async function checkService(url: string, timeout: number, retries = 3) {
       }
 
       return await response.json();
+
     } catch (error: any) {
       lastError = error;
 
@@ -61,6 +79,17 @@ export async function checkHealth(
     }
   ];
 
+  // Wake all services in parallel
+  await Promise.all(
+    services.map(service =>
+      wakeService(service.url)
+    )
+  );
+
+  // Give Render time to wake services
+  await sleep(15000);
+
+  // Perform actual health checks in parallel
   const results = await Promise.all(
     services.map(async (service) => {
       const start = Date.now();
@@ -79,6 +108,7 @@ export async function checkHealth(
           responseTime: `${time}ms`,
           data
         };
+
       } catch (error: any) {
         const time = Date.now() - start;
 
