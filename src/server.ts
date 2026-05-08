@@ -4,7 +4,7 @@ import helmet from "helmet";
 import http from "http";
 
 import { env } from "@config/env";
-import { rateLimiter } from "@middleware/rateLimiter";
+// import { rateLimiter } from "@middleware/rateLimiter";
 import gatewayRouter from "@routes/gatewayRouter";
 import { logger } from "@utils/logger";
 import { wsProxy } from "@services/wsProxy";
@@ -25,12 +25,12 @@ app.use(helmet());
 app.use("/gateway", wsProxy);
 
 
-//Apply rate limiter ONLY to API routes
 app.use((req, res, next) => {
   if (req.path.startsWith("/gateway")) {
     return next();
   }
-  return rateLimiter(req, res, next);
+  //Apply rate limiter ONLY to API routes
+  // return rateLimiter(req, res, next);
 });
 
 //Gateway routes
