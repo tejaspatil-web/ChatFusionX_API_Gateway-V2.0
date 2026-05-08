@@ -40,6 +40,6 @@ const server = http.createServer(app);
 
 server.on("upgrade", wsProxy.upgrade);
 
-server.listen(env.PORT, () => {
+server.listen(env.PORT, "0.0.0.0", () => {
   logger.info(`Gateway running on port ${env.PORT}`);
 });
