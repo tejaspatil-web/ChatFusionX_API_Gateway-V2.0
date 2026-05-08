@@ -1,46 +1,72 @@
-import axios from "axios";
 import { Response } from "express";
 import { env } from "@config/env";
 
-async function checkService(url: string, timeout: number) {
-  try {
-    // First attempt
-    return await axios.get(url, { timeout });
-  } catch (error: any) {
-    // Retry once (same timeout)
-    try {
-      return await axios.get(url, { timeout });
-    } catch (retryError: any) {
-      throw retryError;
-    }
-  }
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function checkHealth(req: any, res: Response) {
+async function checkService(url: string, timeout: number, retries = 3) {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(timeout),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      lastError = error;
+
+      console.log(
+        `[Health Check] Attempt ${attempt} failed for ${url}`
+      );
+
+      // wait before retry
+      if (attempt < retries) {
+        await sleep(5000);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function checkHealth(
+  req: any,
+  res: Response
+) {
   const services = [
     {
       name: "chatfusionx-service",
       url: `${env.CHATFUSIONX_SERVICE}/api/v1/health`,
-      timeout: 50000
+      timeout: 90000
     },
     {
       name: "pdf-to-png-service",
       url: `${env.PDF_TO_PNG_SERVICE}/health`,
-      timeout: 5000
+      timeout: 90000
     },
     {
       name: "text-extraction-service",
       url: `${env.TEXT_EXTRACTION_SERVICE}/health`,
-      timeout: 5000
+      timeout: 90000
     }
   ];
 
   const results = await Promise.all(
     services.map(async (service) => {
-      try {
-        const start = Date.now();
+      const start = Date.now();
 
-        const response = await checkService(
+      try {
+        const data = await checkService(
           service.url,
           service.timeout
         );
@@ -51,15 +77,19 @@ export async function checkHealth(req: any, res: Response) {
           service: service.name,
           status: "UP",
           responseTime: `${time}ms`,
-          data: response.data
+          data
         };
       } catch (error: any) {
+        const time = Date.now() - start;
+
         return {
           service: service.name,
           status:
-            error.code === "ECONNABORTED"
+            error.name === "TimeoutError"
               ? "TIMEOUT (SLEEPING)"
-              : "UNREACHABLE"
+              : "UNREACHABLE",
+          responseTime: `${time}ms`,
+          error: error.message
         };
       }
     })
@@ -67,6 +97,7 @@ export async function checkHealth(req: any, res: Response) {
 
   res.json({
     gateway: "UP",
+    timestamp: new Date().toISOString(),
     services: results
   });
 }

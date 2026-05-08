@@ -1,4 +1,3 @@
-import axios from "axios";
 import { Response } from "express";
 import { services } from "@config/serviceRegistry";
 import { env } from "@config/env";
@@ -23,6 +22,7 @@ export async function proxyRequest(req: any, res: Response) {
     logger.info(`${req.method} ${req.originalUrl} -> ${target}`);
 
     const contentLength = Number(req.headers["content-length"] || 0);
+
     if (contentLength > maxContentLength) {
       logger.error(`Payload too large: ${contentLength}`);
       return res.status(413).json({ error: "Payload too large" });
@@ -38,29 +38,34 @@ export async function proxyRequest(req: any, res: Response) {
     delete headers["connection"];
 
     const isBodyAllowed = !["GET", "HEAD"].includes(req.method);
-    const isMultipart = req.headers["content-type"]?.includes("multipart/form-data");
 
-    const response = await axios({
+    const isMultipart =
+      req.headers["content-type"]?.includes("multipart/form-data");
+
+    const response = await fetch(target, {
       method: req.method,
-      url: target,
       headers,
-      data: isBodyAllowed ? (isMultipart ? req : req.body) : undefined,
-      responseType: "arraybuffer",
-      maxContentLength,
-      maxBodyLength: maxContentLength,
-      timeout: 300000,
-      validateStatus: () => true
+      body: isBodyAllowed
+        ? (isMultipart
+            ? (req as any)
+            : JSON.stringify(req.body))
+        : undefined,
+      signal: AbortSignal.timeout(300000)
     });
 
     logger.info(`Response ${response.status} from ${target}`);
 
-    Object.entries(response.headers).forEach(([key, value]) => {
+    response.headers.forEach((value, key) => {
       if (value && key.toLowerCase() !== "transfer-encoding") {
-        res.setHeader(key, value as any);
+        res.setHeader(key, value);
       }
     });
 
-    const contentType = response.headers["content-type"] || "";
+    const arrayBuffer = await response.arrayBuffer();
+    const data = Buffer.from(arrayBuffer);
+
+    const contentType =
+      response.headers.get("content-type") || "";
 
     if (
       contentType.includes("application/octet-stream") ||
@@ -68,44 +73,36 @@ export async function proxyRequest(req: any, res: Response) {
       contentType.includes("image")
     ) {
       logger.info(`Streaming binary response: ${contentType}`);
-      return res.status(response.status).send(response.data);
+
+      return res.status(response.status).send(data);
     }
 
-    const text = Buffer.from(response.data).toString("utf-8");
+    const text = data.toString("utf-8");
 
     try {
       const json = JSON.parse(text);
+
       return res.status(response.status).json(json);
     } catch {
       logger.error("Non-JSON response returned");
+
       return res.status(response.status).send(text);
     }
 
   } catch (err: any) {
-    if (err.response) {
-      let data = err.response.data;
-      if (Buffer.isBuffer(data)) data = data.toString("utf-8");
 
-      logger.error(`Upstream error ${err.response.status}: ${data}`);
-
-      return res.status(err.response.status).send({
-        error: "Upstream service error",
-        details: data
-      });
-    }
-
-    if (err.code === "ECONNABORTED") {
+    if (err.name === "TimeoutError") {
       logger.error("Gateway timeout");
-      return res.status(504).json({ error: "Gateway timeout" });
-    }
 
-    if (err.request) {
-      logger.error("Service unavailable");
-      return res.status(503).json({ error: "Service unavailable" });
+      return res.status(504).json({
+        error: "Gateway timeout"
+      });
     }
 
     logger.error(`Gateway internal error: ${err.message}`);
 
-    return res.status(500).json({ error: "Gateway internal error" });
+    return res.status(503).json({
+      error: "Service unavailable"
+    });
   }
 }
