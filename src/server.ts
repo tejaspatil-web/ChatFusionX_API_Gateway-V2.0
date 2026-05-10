@@ -9,6 +9,7 @@ import { logger } from "@utils/logger";
 import { services } from "@config/serviceRegistry";
 import { createServiceProxy } from "@services/proxyService";
 import { wsProxy } from "@services/wsProxy";
+import { verifyJWT } from "@middleware/verifyJWT";
 
 const app = express();
 
@@ -41,12 +42,9 @@ app.use(cors({
 
 
 app.use((req, res, next) => {
-
-  // Skip body parsing for proxied routes
-  if (
-    req.path.startsWith("/api/")
-    || req.path.startsWith("/gateway")
-  ) {
+// Skip body parsing for proxied routes
+const skipBodyParsing = req.path.startsWith("/api/") || req.path.startsWith("/gateway");
+  if (skipBodyParsing) {
     return next();
   }
 
@@ -83,12 +81,9 @@ app.use("/gateway", wsProxy);
 // ==========================
 for (const service of services) {
 
-  logger.info(
-    `Proxy mounted: ${service.prefix} -> ${service.target}`
-  );
-
   app.use(
     service.prefix,
+    verifyJWT,
     createServiceProxy(service.prefix)
   );
 }

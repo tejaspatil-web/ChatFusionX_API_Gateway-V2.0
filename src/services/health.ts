@@ -60,11 +60,29 @@ export async function checkHealth(
   res: Response
 ) {
 
+  // Wake background services
+  // Do not wait for response
+
+  fetch(
+    `${env.PDF_TO_PNG_SERVICE}/health`,
+    {
+      signal: AbortSignal.timeout(10000)
+    }
+  ).catch(() => {});
+
+  fetch(
+    `${env.TEXT_EXTRACTION_SERVICE}/health`,
+    {
+      signal: AbortSignal.timeout(10000)
+    }
+  ).catch(() => {});
+
   const start = Date.now();
 
+  // Wait only for main service
   const mainService =
     await checkService(
-      `${env.CHATFUSIONX_SERVICE}/health`,
+      `${env.CHATFUSIONX_SERVICE}/api/v1/health`,
       15000
     );
 
@@ -94,6 +112,16 @@ export async function checkHealth(
         ...(mainService.error && {
           error: mainService.error
         })
+      },
+
+      {
+        service: "pdf-to-png-service",
+        status: "WAKING_IN_BACKGROUND"
+      },
+
+      {
+        service: "text-extraction-service",
+        status: "WAKING_IN_BACKGROUND"
       }
     ]
   });
