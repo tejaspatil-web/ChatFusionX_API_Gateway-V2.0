@@ -4,46 +4,117 @@ import helmet from "helmet";
 import http from "http";
 
 import { env } from "@config/env";
-// import { rateLimiter } from "@middleware/rateLimiter";
-import gatewayRouter from "@routes/gatewayRouter";
 import { logger } from "@utils/logger";
+
+import { services } from "@config/serviceRegistry";
+import { createServiceProxy } from "@services/proxyService";
 import { wsProxy } from "@services/wsProxy";
 
 const app = express();
 
 const PORT = process.env.PORT || env.PORT || 3000;
 
-//Body parsers
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.disable("x-powered-by");
 
-//Global middlewares
-app.use(cors({
-  origin: [env.FRONTEND_URL,"http://localhost:4200"],
-}));
+
+// ==========================
+// TRUST PROXY
+// ==========================
+app.set("trust proxy", 1);
+
+// ==========================
+// SECURITY
+// ==========================
 app.use(helmet());
 
-//WebSocket proxy
+
+// ==========================
+// CORS
+// ==========================
+app.use(cors({
+  origin: [
+    env.FRONTEND_URL,
+    "http://localhost:4200"
+  ],
+  credentials: true
+}));
+
+
+// ==========================
+// BODY PARSERS
+// ==========================
+app.use(express.json({
+  limit: "50mb"
+}));
+
+app.use(express.urlencoded({
+  extended: true,
+  limit: "50mb"
+}));
+
+// ==========================
+// HEALTH CHECK
+// ==========================
+app.get("/health", (_, res) => {
+
+  return res.status(200).json({
+    gateway: "UP",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==========================
+// WEBSOCKET PROXY
+// ==========================
 app.use("/gateway", wsProxy);
 
 
-app.use((req, res, next) => {
-  if (req.path.startsWith("/gateway")) {
-    return next();
-  }
-  //Apply rate limiter ONLY to API routes
-  // return rateLimiter(req, res, next);
+// ==========================
+// SERVICE PROXIES
+// ==========================
+for (const service of services) {
 
-  next();
+  logger.info(
+    `Proxy mounted: ${service.prefix} -> ${service.target}`
+  );
+
+  app.use(
+    service.prefix,
+    createServiceProxy(service.prefix)
+  );
+}
+
+
+// ==========================
+// 404 HANDLER
+// ==========================
+app.use((req, res) => {
+
+  logger.error(
+    `Route not found: ${req.method} ${req.originalUrl}`
+  );
+
+  return res.status(404).json({
+    error: "Route not found"
+  });
 });
 
-//Gateway routes
-app.use(gatewayRouter);
-
+// ==========================
+// HTTP SERVER
+// ==========================
 const server = http.createServer(app);
 
+// ==========================
+// WS UPGRADE
+// ==========================
 server.on("upgrade", wsProxy.upgrade);
 
+// ==========================
+// START SERVER
+// ==========================
 server.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`Gateway running on port ${PORT}`);
+
+  logger.info(
+    `Gateway running on port ${PORT}`
+  );
 });
