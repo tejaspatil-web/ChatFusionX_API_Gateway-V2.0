@@ -7,7 +7,7 @@ export const wsProxy = createProxyMiddleware({
   changeOrigin: true,
   ws: true,
   xfwd: true,
-  secure: true,
+  secure: false,
   followRedirects: true,
   proxyTimeout: 300000,
   timeout: 300000,
