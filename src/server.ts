@@ -40,17 +40,26 @@ app.use(cors({
 }));
 
 
-// ==========================
-// BODY PARSERS
-// ==========================
-app.use(express.json({
-  limit: "50mb"
-}));
+app.use((req, res, next) => {
 
-app.use(express.urlencoded({
-  extended: true,
-  limit: "50mb"
-}));
+  // Skip body parsing for proxied routes
+  if (
+    req.path.startsWith("/api/")
+    || req.path.startsWith("/gateway")
+  ) {
+    return next();
+  }
+
+  express.json({
+    limit: "50mb"
+  })(req, res, () => {
+
+    express.urlencoded({
+      extended: true,
+      limit: "50mb"
+    })(req, res, next);
+  });
+});
 
 // ==========================
 // HEALTH CHECK
