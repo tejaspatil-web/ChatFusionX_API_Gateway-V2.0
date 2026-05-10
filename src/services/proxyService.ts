@@ -17,17 +17,40 @@ export function createServiceProxy(prefix: string) {
   }
 
   return createProxyMiddleware({
+
     target: service.target,
+
     changeOrigin: true,
+
     ws: true,
-    xfwd: true,
+
     secure: false,
+
+    xfwd: true,
+
     followRedirects: true,
+
+    prependPath: false,
+
     proxyTimeout: 300000,
+
     timeout: 300000,
-    selfHandleResponse: false,
+
+    // Preserve full original route dynamically
+    pathRewrite: (_, req: any) => {
+      return req.originalUrl;
+    },
+
     on: {
+
       proxyReq: (proxyReq, req: any) => {
+
+        const finalUrl =
+          `${service.target}${req.originalUrl}`;
+
+        logger.info(
+          `PROXY => ${finalUrl}`
+        );
 
         proxyReq.setHeader(
           "X-SERVICE-KEY",
@@ -46,7 +69,7 @@ export function createServiceProxy(prefix: string) {
         );
       },
 
-      error: (err, req: any, res: any) => {
+      error: (err: any, req: any, res: any) => {
 
         logger.error(
           `Proxy error: ${err.message}`
@@ -55,7 +78,8 @@ export function createServiceProxy(prefix: string) {
         if (!res.headersSent) {
 
           return res.status(503).json({
-            error: "Service unavailable"
+            error: "Service unavailable",
+            message: err.message
           });
         }
       }
