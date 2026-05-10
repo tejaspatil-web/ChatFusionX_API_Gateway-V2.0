@@ -6,9 +6,13 @@ import http from "http";
 import { env } from "@config/env";
 import { logger } from "@utils/logger";
 
+import gatewayRouter from "@routes/gatewayRouter";
+
 import { services } from "@config/serviceRegistry";
+
 import { createServiceProxy } from "@services/proxyService";
 import { wsProxy } from "@services/wsProxy";
+
 import { verifyJWT } from "@middleware/verifyJWT";
 
 const app = express();
@@ -21,17 +25,21 @@ app.disable("x-powered-by");
 // ==========================
 // TRUST PROXY
 // ==========================
+
 app.set("trust proxy", 1);
+
 
 // ==========================
 // SECURITY
 // ==========================
+
 app.use(helmet());
 
 
 // ==========================
 // CORS
 // ==========================
+
 app.use(cors({
   origin: [
     env.FRONTEND_URL,
@@ -41,9 +49,18 @@ app.use(cors({
 }));
 
 
+// ==========================
+// BODY PARSING
+// Skip proxied routes
+// ==========================
+
 app.use((req, res, next) => {
-// Skip body parsing for proxied routes
-const skipBodyParsing = req.path.startsWith("/api/") || req.path.startsWith("/gateway");
+
+  const skipBodyParsing =
+    req.path.startsWith("/api/")
+    || req.path.startsWith("/gateway")
+    || req.path.startsWith("/health");
+
   if (skipBodyParsing) {
     return next();
   }
@@ -59,27 +76,30 @@ const skipBodyParsing = req.path.startsWith("/api/") || req.path.startsWith("/ga
   });
 });
 
-// ==========================
-// HEALTH CHECK
-// ==========================
-app.get("/health", (_, res) => {
 
-  return res.status(200).json({
-    gateway: "UP",
-    timestamp: new Date().toISOString()
-  });
-});
+// ==========================
+// GATEWAY ROUTES
+// ==========================
+
+app.use(gatewayRouter);
+
 
 // ==========================
 // WEBSOCKET PROXY
 // ==========================
+
 app.use("/gateway", wsProxy);
 
 
 // ==========================
-// SERVICE PROXIES
+// DYNAMIC SERVICE PROXIES
 // ==========================
+
 for (const service of services) {
+
+  logger.info(
+    `Proxy mounted: ${service.prefix} -> ${service.target}`
+  );
 
   app.use(
     service.prefix,
@@ -92,6 +112,7 @@ for (const service of services) {
 // ==========================
 // 404 HANDLER
 // ==========================
+
 app.use((req, res) => {
 
   logger.error(
@@ -103,19 +124,25 @@ app.use((req, res) => {
   });
 });
 
+
 // ==========================
 // HTTP SERVER
 // ==========================
+
 const server = http.createServer(app);
 
+
 // ==========================
-// WS UPGRADE
+// WEBSOCKET UPGRADE
 // ==========================
+
 server.on("upgrade", wsProxy.upgrade);
+
 
 // ==========================
 // START SERVER
 // ==========================
+
 server.listen(Number(PORT), "0.0.0.0", () => {
 
   logger.info(
